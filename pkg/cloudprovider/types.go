@@ -82,9 +82,8 @@ type InstanceType struct {
 	// of Kubernetes.
 	Overhead *InstanceTypeOverhead
 
-	onReadOnce   sync.Once
-	onUpdateOnce sync.Once
-	allocatable  v1.ResourceList
+	once        sync.Once
+	allocatable v1.ResourceList
 }
 
 type InstanceTypes []*InstanceType
@@ -96,14 +95,12 @@ func (i *InstanceType) precompute() {
 }
 
 func (i *InstanceType) Allocatable() v1.ResourceList {
-	i.onReadOnce.Do(i.precompute)
+	i.once.Do(i.precompute)
 	return i.allocatable.DeepCopy()
 }
 
-// Should be called only when there's a change, as it can be expensive
 func (i *InstanceType) UpdateAllocatable(newAllocatable v1.ResourceList) {
 	i.allocatable = newAllocatable
-	i.onUpdateOnce.Do(i.precompute)
 }
 
 func (its InstanceTypes) OrderByPrice(reqs scheduling.Requirements) InstanceTypes {
