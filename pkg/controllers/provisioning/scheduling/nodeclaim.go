@@ -265,7 +265,7 @@ func (n *NodeClaim) filterInstanceTypesByRequirements(requirements scheduling.Re
 		)
 		cachedAllocatable, ok := sharedcache.SharedCache().Get(cacheMapKey)
 		if ok && cachedAllocatable != nil {
-			it.UpdateAllocatable(cachedAllocatable.(v1.ResourceList))
+			it.SetAllocatable(cachedAllocatable.(v1.ResourceList))
 		}
 
 		itFits := fits(it, requests)

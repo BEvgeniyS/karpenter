@@ -99,7 +99,7 @@ func (i *InstanceType) Allocatable() v1.ResourceList {
 	return i.allocatable.DeepCopy()
 }
 
-func (i *InstanceType) UpdateAllocatable(newAllocatable v1.ResourceList) {
+func (i *InstanceType) SetAllocatable(newAllocatable v1.ResourceList) {
 	i.allocatable = newAllocatable
 }
 
