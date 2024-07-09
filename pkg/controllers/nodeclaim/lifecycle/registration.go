@@ -89,7 +89,7 @@ func (r *Registration) syncNode(ctx context.Context, nodeClaim *v1beta1.NodeClai
 		nodeClaim.Labels[v1beta1.NodePoolLabelKey],
 		nodeClaim.Labels[v1.LabelInstanceTypeStable],
 	)
-	sharedcache.SharedCache().Add(cacheMapKey, stored.Status.Allocatable, 0)
+	sharedcache.SharedCache().Set(cacheMapKey, stored.Status.Allocatable, sharedcache.DefaultSharedCacheTTL)
 	nodeClaim.Status.Allocatable = stored.Status.Allocatable
 
 	node = nodeclaimutil.UpdateNodeOwnerReferences(nodeClaim, node)
