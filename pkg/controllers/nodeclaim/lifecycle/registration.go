@@ -90,10 +90,11 @@ func (r *Registration) syncNode(ctx context.Context, nodeClaim *v1beta1.NodeClai
 		nodeClaim.Labels[v1.LabelInstanceTypeStable],
 	)
 	oldmem := nodeClaim.Status.Allocatable[v1.ResourceMemory]
+	oldmemMi := oldmem.Value() / 1024 / 1024
 	newmem := stored.Status.Allocatable[v1.ResourceMemory]
 	newmemMi := newmem.Value() / 1024 / 1024
 
-	fmt.Printf("_Overriding nodeclaim allocatable (%s=>%vMi), (Saving to cache for : %s;%s)\n", oldmem.String(), newmemMi, nodeClaim.Labels[v1beta1.NodePoolLabelKey], nodeClaim.Labels[v1.LabelInstanceTypeStable])
+	fmt.Printf("_Updating nodeclaim allocatable %vMi=>%vMi, (Saving to cache for : %s;%s)\n", oldmemMi, newmemMi, nodeClaim.Labels[v1beta1.NodePoolLabelKey], nodeClaim.Labels[v1.LabelInstanceTypeStable])
 
 	sharedcache.SharedCache().Set(cacheMapKey, stored.Status.Allocatable, sharedcache.DefaultSharedCacheTTL)
 	nodeClaim.Status.Allocatable = stored.Status.Allocatable

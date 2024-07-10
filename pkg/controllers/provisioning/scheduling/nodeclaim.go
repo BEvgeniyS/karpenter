@@ -265,8 +265,11 @@ func (n *NodeClaim) filterInstanceTypesByRequirements(requirements scheduling.Re
 		)
 		cachedAllocatable, ok := sharedcache.SharedCache().Get(cacheMapKey)
 		if ok && cachedAllocatable != nil {
+			oldmem := it.Allocatable()[v1.ResourceMemory]
+			oldmemMi := oldmem.Value() / 1024 / 1024
 			newmem := cachedAllocatable.(v1.ResourceList)[v1.ResourceMemory]
-			fmt.Printf("_Updated allocatable from cache for instance type: %s with value: %s\n", it.Name, newmem.String())
+			newmemMi := newmem.Value() / 1024 / 1024
+			fmt.Printf("_Overriding allocatable %vMi=>%vMi from cache %s;%s\n", oldmemMi, newmemMi, n.NodePoolName, it.Name)
 			it.SetAllocatable(cachedAllocatable.(v1.ResourceList))
 		}
 
