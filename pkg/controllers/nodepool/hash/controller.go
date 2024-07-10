@@ -67,7 +67,7 @@ func (c *Controller) Reconcile(ctx context.Context, np *v1beta1.NodePool) (recon
 	if !equality.Semantic.DeepEqual(stored, np) {
 		// Clear relevant allocatable cache if the hash has changed
 		for cacheKey := range sharedcache.SharedCache().Items() {
-			if strings.HasPrefix(cacheKey, fmt.Sprintf("allocatableCache;%s", np.Name)) {
+			if strings.HasPrefix(cacheKey, fmt.Sprintf("allocatableCache;%s;", np.Name)) {
 				sharedcache.SharedCache().Delete(cacheKey)
 			}
 		}
