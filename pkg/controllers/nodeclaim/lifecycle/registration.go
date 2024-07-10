@@ -94,7 +94,9 @@ func (r *Registration) syncNode(ctx context.Context, nodeClaim *v1beta1.NodeClai
 	newmem := stored.Status.Allocatable[v1.ResourceMemory]
 	newmemMi := newmem.Value() / 1024 / 1024
 
-	fmt.Printf("_Updating nodeclaim allocatable %vMi=>%vMi, (Saving to cache for : %s;%s)\n", oldmemMi, newmemMi, nodeClaim.Labels[v1beta1.NodePoolLabelKey], nodeClaim.Labels[v1.LabelInstanceTypeStable])
+	if oldmemMi != newmemMi {
+		fmt.Printf("_Updating nodeclaim allocatable %vMi=>%vMi, (Saving to cache: %s)\n", oldmemMi, newmemMi, cacheMapKey)
+	}
 
 	sharedcache.SharedCache().Set(cacheMapKey, stored.Status.Allocatable, sharedcache.DefaultSharedCacheTTL)
 	nodeClaim.Status.Allocatable = stored.Status.Allocatable
