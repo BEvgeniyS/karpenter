@@ -266,7 +266,7 @@ func (n *NodeClaim) filterInstanceTypesByRequirements(requirements scheduling.Re
 		cachedAllocatable, ok := sharedcache.SharedCache().Get(cacheMapKey)
 		if ok && cachedAllocatable != nil {
 			newmem := cachedAllocatable.(v1.ResourceList)[v1.ResourceMemory]
-			fmt.Printf("_Updated allocatable from cache for instance type: %s with value: %s", it.Name, newmem.String())
+			fmt.Printf("_Updated allocatable from cache for instance type: %s with value: %s\n", it.Name, newmem.String())
 			it.SetAllocatable(cachedAllocatable.(v1.ResourceList))
 		}
 
