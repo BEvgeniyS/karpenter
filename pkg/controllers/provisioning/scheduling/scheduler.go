@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/karpenter/pkg/operator/injection"
 
 	"github.com/patrickmn/go-cache"
+
 	"sigs.k8s.io/karpenter/pkg/cloudprovider"
 	"sigs.k8s.io/karpenter/pkg/controllers/state"
 	"sigs.k8s.io/karpenter/pkg/events"

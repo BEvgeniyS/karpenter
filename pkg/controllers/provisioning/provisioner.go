@@ -52,6 +52,7 @@ import (
 	"sigs.k8s.io/karpenter/pkg/utils/pretty"
 
 	"github.com/patrickmn/go-cache"
+
 	"sigs.k8s.io/karpenter/pkg/cloudprovider"
 	scheduler "sigs.k8s.io/karpenter/pkg/controllers/provisioning/scheduling"
 	"sigs.k8s.io/karpenter/pkg/controllers/state"

@@ -177,8 +177,8 @@ func benchmarkScheduler(b *testing.B, instanceCount, podCount int) {
 	scheduler := scheduling.NewScheduler(client, []*v1.NodePool{nodePool},
 		cluster, nil, topology,
 		map[string][]*cloudprovider.InstanceType{nodePool.Name: instanceTypes}, nil,
-		events.NewRecorder(&record.FakeRecorder{}), cache.New(time.Hour*24, time.Hour))
-
+		events.NewRecorder(&record.FakeRecorder{}),
+		cache.New(time.Hour*24, time.Hour))
 	b.ResetTimer()
 	// Pack benchmark
 	start := time.Now()
