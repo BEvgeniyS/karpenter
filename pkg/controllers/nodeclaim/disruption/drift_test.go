@@ -404,7 +404,7 @@ var _ = Describe("Drift", func() {
 		var nodePoolController *hash.Controller
 		BeforeEach(func() {
 			cp.Drifted = ""
-			nodePoolController = hash.NewController(env.Client, cache.New(time.Hour, time.Hour))
+			nodePoolController = hash.NewController(env.Client, cache.New(time.Hour*24, time.Hour))
 			nodePool = &v1.NodePool{
 				ObjectMeta: nodePool.ObjectMeta,
 				Spec: v1.NodePoolSpec{

@@ -55,7 +55,7 @@ func TestAPIs(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	env = test.NewEnvironment(test.WithCRDs(apis.CRDs...), test.WithCRDs(v1alpha1.CRDs...))
-	nodePoolController = hash.NewController(env.Client, cache.New(time.Minute, time.Second*10))
+	nodePoolController = hash.NewController(env.Client, cache.New(time.Hour*24, time.Hour))
 })
 
 var _ = AfterSuite(func() {
