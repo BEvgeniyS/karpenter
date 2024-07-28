@@ -150,7 +150,7 @@ func NewOperator() (context.Context, *Operator) {
 	// Manager
 	mgrOpts := ctrl.Options{
 		Logger:                        logging.IgnoreDebugEvents(logger),
-		LeaderElection:                options.FromContext(ctx).EnableLeaderElection,
+		LeaderElection:                !options.FromContext(ctx).DisableLeaderElection,
 		LeaderElectionID:              "karpenter-leader-election",
 		LeaderElectionResourceLock:    resourcelock.LeasesResourceLock,
 		LeaderElectionNamespace:       system.Namespace(),
@@ -219,9 +219,6 @@ func NewOperator() (context.Context, *Operator) {
 		return []string{o.(*v1.NodePool).Spec.Template.Spec.NodeClassRef.Name}
 	}), "failed to setup nodepool nodeclassref name indexer")
 
-	lo.Must0(mgr.AddReadyzCheck("manager", func(req *http.Request) error {
-		return lo.Ternary(mgr.GetCache().WaitForCacheSync(req.Context()), nil, fmt.Errorf("failed to sync caches"))
-	}))
 	lo.Must0(mgr.AddHealthzCheck("healthz", healthz.Ping))
 	lo.Must0(mgr.AddReadyzCheck("readyz", healthz.Ping))
 
