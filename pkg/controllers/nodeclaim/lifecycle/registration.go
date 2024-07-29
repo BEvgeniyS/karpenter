@@ -102,7 +102,12 @@ func (r *Registration) syncNode(ctx context.Context, nodeClaim *v1.NodeClaim, no
 		nodeClaim.Labels[v1.NodePoolLabelKey],
 		nodeClaim.Labels[corev1.LabelInstanceTypeStable],
 	)
-	r.cache.Set(cacheMapKey, stored.Status.Allocatable, cache.DefaultExpiration)
+	cacheValue, found := r.cache.Get(cacheMapKey)
+	if !found || !equality.Semantic.DeepEqual(cacheValue.(corev1.ResourceList), nodeClaim.Status.Allocatable) {
+		log.FromContext(ctx).WithValues("NodePool", nodeClaim.Labels[v1.NodePoolLabelKey]).Info(fmt.Sprintf("Settings %s to allocatable cache for nodepool", nodeClaim.Labels[corev1.LabelInstanceTypeStable]))
+		r.cache.Set(cacheMapKey, stored.Status.Allocatable, cache.DefaultExpiration)
+	}
+
 	nodeClaim.Status.Allocatable = stored.Status.Allocatable
 
 	node = nodeclaimutil.UpdateNodeOwnerReferences(nodeClaim, node)

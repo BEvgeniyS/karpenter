@@ -27,6 +27,7 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -72,6 +73,7 @@ func (c *Controller) Reconcile(ctx context.Context, np *v1.NodePool) (reconcile.
 		for cacheKey := range c.cache.Items() {
 			if strings.HasPrefix(cacheKey, fmt.Sprintf("allocatableCache;%s;", np.Name)) {
 				c.cache.Delete(cacheKey)
+				log.FromContext(ctx).WithValues("NodePool", np.Name).Info("Cleared allocatable cache")
 			}
 		}
 		if err := c.kubeClient.Patch(ctx, np, client.MergeFrom(stored)); err != nil {
