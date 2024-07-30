@@ -160,7 +160,14 @@ var _ = AfterEach(func() {
 var _ = Describe("Simulate Scheduling", func() {
 	var nodePool *v1.NodePool
 	BeforeEach(func() {
-		nodePool = test.NodePool()
+		nodePool = test.NodePool(v1.NodePool{
+			Spec: v1.NodePoolSpec{
+				Disruption: v1.Disruption{
+					ConsolidateAfter:    v1.NillableDuration{Duration: lo.ToPtr(time.Duration(0))},
+					ConsolidationPolicy: v1.ConsolidationPolicyWhenUnderutilized,
+				},
+			},
+		})
 	})
 	It("should allow pods on deleting nodes to reschedule to uninitialized nodes", func() {
 		numNodes := 10
@@ -197,7 +204,7 @@ var _ = Describe("Simulate Scheduling", func() {
 				},
 			},
 		})
-		nodePool.Spec.Disruption.ConsolidateAfter = &v1.NillableDuration{Duration: nil}
+		nodePool.Spec.Disruption.ConsolidateAfter = v1.NillableDuration{Duration: nil}
 		ExpectApplied(ctx, env.Client, pod)
 		ExpectManualBinding(ctx, env.Client, pod, nodes[0])
 
@@ -275,7 +282,7 @@ var _ = Describe("Simulate Scheduling", func() {
 			},
 		})
 
-		nodePool.Spec.Disruption.ConsolidateAfter = &v1.NillableDuration{Duration: nil}
+		nodePool.Spec.Disruption.ConsolidateAfter = v1.NillableDuration{Duration: nil}
 		nodePool.Spec.Disruption.Budgets = []v1.Budget{{Nodes: "3"}}
 		ExpectApplied(ctx, env.Client, nodePool)
 
@@ -366,6 +373,7 @@ var _ = Describe("Simulate Scheduling", func() {
 				},
 			},
 		})
+		nodeClaim.StatusConditions().SetTrue(v1.ConditionTypeConsolidatable)
 		labels := map[string]string{
 			"app": "test",
 		}
@@ -503,6 +511,9 @@ var _ = Describe("Disruption Taints", func() {
 			currentInstance,
 			replacementInstance,
 		}
+		nodePool.Spec.Disruption.ConsolidateAfter.Duration = lo.ToPtr(time.Duration(0))
+		nodeClaim.StatusConditions().SetTrue(v1.ConditionTypeConsolidatable)
+		ExpectApplied(ctx, env.Client, nodeClaim, nodePool)
 	})
 	It("should remove taints from NodeClaims that were left tainted from a previous disruption action", func() {
 		pod := test.Pod(test.PodOptions{
@@ -513,7 +524,7 @@ var _ = Describe("Disruption Taints", func() {
 				},
 			},
 		})
-		nodePool.Spec.Disruption.ConsolidateAfter = &v1.NillableDuration{Duration: nil}
+		nodePool.Spec.Disruption.ConsolidateAfter = v1.NillableDuration{Duration: nil}
 		node.Spec.Taints = append(node.Spec.Taints, v1.DisruptedNoScheduleTaint)
 		ExpectApplied(ctx, env.Client, nodePool, nodeClaim, node, pod)
 		ExpectManualBinding(ctx, env.Client, pod, node)
@@ -551,12 +562,13 @@ var _ = Describe("Disruption Taints", func() {
 
 		// Iterate in a loop until we get to the validation action
 		// Then, apply the pods to the cluster and bind them to the nodes
-		for {
+		for i := 0; i < 20; i++ {
 			time.Sleep(100 * time.Millisecond)
 			if len(ExpectNodeClaims(ctx, env.Client)) == 2 {
 				break
 			}
 		}
+
 		node = ExpectNodeExists(ctx, env.Client, node.Name)
 		Expect(node.Spec.Taints).To(ContainElement(v1.DisruptedNoScheduleTaint))
 
@@ -1734,11 +1746,14 @@ var _ = Describe("Metrics", func() {
 	var labels = map[string]string{
 		"app": "test",
 	}
+	var nodeClaims []*v1.NodeClaim
+	var nodes []*corev1.Node
 	BeforeEach(func() {
 		nodePool = test.NodePool(v1.NodePool{
 			Spec: v1.NodePoolSpec{
 				Disruption: v1.Disruption{
 					ConsolidationPolicy: v1.ConsolidationPolicyWhenUnderutilized,
+					ConsolidateAfter:    v1.NillableDuration{Duration: lo.ToPtr(time.Duration(0))},
 					// Disrupt away!
 					Budgets: []v1.Budget{{
 						Nodes: "100%",
@@ -1746,25 +1761,28 @@ var _ = Describe("Metrics", func() {
 				},
 			},
 		})
-	})
-	It("should fire metrics for single node empty disruption", func() {
-		nodeClaim, node := test.NodeClaimAndNode(v1.NodeClaim{
+		nodeClaims, nodes = test.NodeClaimsAndNodes(3, v1.NodeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
 					v1.NodePoolLabelKey:            nodePool.Name,
-					corev1.LabelInstanceTypeStable: mostExpensiveInstance.Name,
-					v1.CapacityTypeLabelKey:        mostExpensiveOffering.Requirements.Get(v1.CapacityTypeLabelKey).Any(),
-					corev1.LabelTopologyZone:       mostExpensiveOffering.Requirements.Get(corev1.LabelTopologyZone).Any(),
+					corev1.LabelInstanceTypeStable: leastExpensiveInstance.Name,
+					v1.CapacityTypeLabelKey:        leastExpensiveOffering.Requirements.Get(v1.CapacityTypeLabelKey).Any(),
+					corev1.LabelTopologyZone:       leastExpensiveOffering.Requirements.Get(corev1.LabelTopologyZone).Any(),
 				},
 			},
 			Status: v1.NodeClaimStatus{
-				ProviderID: test.RandomProviderID(),
 				Allocatable: map[corev1.ResourceName]resource.Quantity{
 					corev1.ResourceCPU:  resource.MustParse("32"),
 					corev1.ResourcePods: resource.MustParse("100"),
 				},
 			},
 		})
+		for _, nc := range nodeClaims {
+			nc.StatusConditions().SetTrue(v1.ConditionTypeConsolidatable)
+		}
+	})
+	It("should fire metrics for single node empty disruption", func() {
+		nodeClaim, node := nodeClaims[0], nodes[0]
 		nodeClaim.StatusConditions().SetTrue(v1.ConditionTypeDrifted)
 		ExpectApplied(ctx, env.Client, nodeClaim, node, nodePool)
 
@@ -1785,25 +1803,12 @@ var _ = Describe("Metrics", func() {
 		})
 	})
 	It("should fire metrics for single node delete disruption", func() {
-		nodeClaims, nodes := test.NodeClaimsAndNodes(2, v1.NodeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					v1.NodePoolLabelKey:            nodePool.Name,
-					corev1.LabelInstanceTypeStable: leastExpensiveInstance.Name,
-					v1.CapacityTypeLabelKey:        leastExpensiveOffering.Requirements.Get(v1.CapacityTypeLabelKey).Any(),
-					corev1.LabelTopologyZone:       leastExpensiveOffering.Requirements.Get(corev1.LabelTopologyZone).Any(),
-				},
-			},
-			Status: v1.NodeClaimStatus{
-				Allocatable: map[corev1.ResourceName]resource.Quantity{
-					corev1.ResourceCPU:  resource.MustParse("32"),
-					corev1.ResourcePods: resource.MustParse("100"),
-				},
-			},
-		})
+		nodeClaims, nodes = nodeClaims[:2], nodes[:2]
 		pods := test.Pods(4, test.PodOptions{})
 
+		// only allow one node to be disruptable
 		nodeClaims[0].StatusConditions().SetTrue(v1.ConditionTypeDrifted)
+		Expect(nodeClaims[1].StatusConditions().Clear(v1.ConditionTypeConsolidatable)).To(Succeed())
 
 		ExpectApplied(ctx, env.Client, pods[0], pods[1], pods[2], pods[3], nodeClaims[0], nodes[0], nodeClaims[1], nodes[1], nodePool)
 
@@ -1830,25 +1835,10 @@ var _ = Describe("Metrics", func() {
 		})
 	})
 	It("should fire metrics for single node replace disruption", func() {
-		nodeClaim, node := test.NodeClaimAndNode(v1.NodeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					v1.NodePoolLabelKey:            nodePool.Name,
-					corev1.LabelInstanceTypeStable: mostExpensiveInstance.Name,
-					v1.CapacityTypeLabelKey:        mostExpensiveOffering.Requirements.Get(v1.CapacityTypeLabelKey).Any(),
-					corev1.LabelTopologyZone:       mostExpensiveOffering.Requirements.Get(corev1.LabelTopologyZone).Any(),
-				},
-			},
-			Status: v1.NodeClaimStatus{
-				ProviderID: test.RandomProviderID(),
-				Allocatable: map[corev1.ResourceName]resource.Quantity{
-					corev1.ResourceCPU:  resource.MustParse("32"),
-					corev1.ResourcePods: resource.MustParse("100"),
-				},
-			},
-		})
-		pods := test.Pods(4, test.PodOptions{})
+		nodeClaim, node := nodeClaims[0], nodes[0]
 		nodeClaim.StatusConditions().SetTrue(v1.ConditionTypeDrifted)
+
+		pods := test.Pods(4, test.PodOptions{})
 
 		ExpectApplied(ctx, env.Client, pods[0], pods[1], pods[2], pods[3], nodeClaim, node, nodePool)
 
@@ -1875,22 +1865,6 @@ var _ = Describe("Metrics", func() {
 		})
 	})
 	It("should fire metrics for multi-node empty disruption", func() {
-		nodeClaims, nodes := test.NodeClaimsAndNodes(3, v1.NodeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					v1.NodePoolLabelKey:            nodePool.Name,
-					corev1.LabelInstanceTypeStable: leastExpensiveInstance.Name,
-					v1.CapacityTypeLabelKey:        leastExpensiveOffering.Requirements.Get(v1.CapacityTypeLabelKey).Any(),
-					corev1.LabelTopologyZone:       leastExpensiveOffering.Requirements.Get(corev1.LabelTopologyZone).Any(),
-				},
-			},
-			Status: v1.NodeClaimStatus{
-				Allocatable: map[corev1.ResourceName]resource.Quantity{
-					corev1.ResourceCPU:  resource.MustParse("32"),
-					corev1.ResourcePods: resource.MustParse("100"),
-				},
-			},
-		})
 		ExpectApplied(ctx, env.Client, nodeClaims[0], nodes[0], nodeClaims[1], nodes[1], nodeClaims[2], nodes[2], nodePool)
 
 		// inform cluster state about nodes and nodeclaims
@@ -1916,23 +1890,6 @@ var _ = Describe("Metrics", func() {
 		})
 	})
 	It("should fire metrics for multi-node delete disruption", func() {
-		nodeClaims, nodes := test.NodeClaimsAndNodes(3, v1.NodeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					v1.NodePoolLabelKey:            nodePool.Name,
-					corev1.LabelInstanceTypeStable: leastExpensiveInstance.Name,
-					v1.CapacityTypeLabelKey:        leastExpensiveOffering.Requirements.Get(v1.CapacityTypeLabelKey).Any(),
-					corev1.LabelTopologyZone:       leastExpensiveOffering.Requirements.Get(corev1.LabelTopologyZone).Any(),
-				},
-			},
-			Status: v1.NodeClaimStatus{
-				Allocatable: map[corev1.ResourceName]resource.Quantity{
-					corev1.ResourceCPU:  resource.MustParse("32"),
-					corev1.ResourcePods: resource.MustParse("100"),
-				},
-			},
-		})
-
 		// create our RS so we can link a pod to it
 		rs := test.ReplicaSet()
 		ExpectApplied(ctx, env.Client, rs)
@@ -1981,7 +1938,7 @@ var _ = Describe("Metrics", func() {
 		})
 	})
 	It("should fire metrics for multi-node replace disruption", func() {
-		nodeClaims, nodes := test.NodeClaimsAndNodes(3, v1.NodeClaim{
+		nodeClaims, nodes = test.NodeClaimsAndNodes(3, v1.NodeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
 					v1.NodePoolLabelKey:            nodePool.Name,
@@ -1997,7 +1954,9 @@ var _ = Describe("Metrics", func() {
 				},
 			},
 		})
-
+		for _, nc := range nodeClaims {
+			nc.StatusConditions().SetTrue(v1.ConditionTypeConsolidatable)
+		}
 		// create our RS so we can link a pod to it
 		rs := test.ReplicaSet()
 		ExpectApplied(ctx, env.Client, rs)
