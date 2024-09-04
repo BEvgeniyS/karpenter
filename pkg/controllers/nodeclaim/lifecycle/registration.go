@@ -97,9 +97,13 @@ func (r *Registration) syncNode(ctx context.Context, nodeClaim *v1.NodeClaim, no
 		nodeClaim.Labels[corev1.LabelInstanceTypeStable],
 	)
 	cacheValue, found := r.cache.Get(cacheMapKey)
-	if !found || !equality.Semantic.DeepEqual(cacheValue.(corev1.ResourceList), nodeClaim.Status.Allocatable) {
-		log.FromContext(ctx).WithValues("NodePool", nodeClaim.Labels[v1.NodePoolLabelKey]).Info(fmt.Sprintf("Updating allocatable cache for %s", nodeClaim.Labels[corev1.LabelInstanceTypeStable]))
-		r.cache.Set(cacheMapKey, stored.Status.Allocatable, cache.DefaultExpiration)
+	if !found {
+		r.updateAllocatableCache(ctx, nodeClaim.Status.Allocatable, stored.Status.Allocatable, nodeClaim, cacheMapKey)
+	} else {
+		cachedAllocatable := cacheValue.(corev1.ResourceList)
+		if !equality.Semantic.DeepEqual(cachedAllocatable, stored.Status.Allocatable) {
+			r.updateAllocatableCache(ctx, cachedAllocatable, stored.Status.Allocatable, nodeClaim, cacheMapKey)
+		}
 	}
 
 	nodeClaim.Status.Allocatable = stored.Status.Allocatable
@@ -123,4 +127,20 @@ func (r *Registration) syncNode(ctx context.Context, nodeClaim *v1.NodeClaim, no
 		}
 	}
 	return nil
+}
+
+func (r *Registration) updateAllocatableCache(ctx context.Context, oldResourceList corev1.ResourceList, newResourceList corev1.ResourceList, nodeClaim *v1.NodeClaim, cacheMapKey string) {
+	var detailsString string
+	for resource := range newResourceList {
+		oldResourceValue := oldResourceList[resource]
+		newResourceValue := newResourceList[resource]
+		if newResourceValue.Cmp(oldResourceValue) != 0 {
+			detailsString += fmt.Sprintf("%s: %s -> %s, ", resource, oldResourceValue.String(), newResourceValue.String())
+		}
+	}
+	if len(detailsString) > 2 {
+		detailsString = detailsString[:len(detailsString)-2]
+	}
+	log.FromContext(ctx).WithValues("NodePool", nodeClaim.Labels[v1.NodePoolLabelKey]).Info(fmt.Sprintf("Updating allocatable cache for %s. %s", nodeClaim.Labels[corev1.LabelInstanceTypeStable], detailsString))
+	r.cache.Set(cacheMapKey, newResourceList, cache.DefaultExpiration)
 }
